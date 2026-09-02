@@ -137,7 +137,7 @@ function Field({ label, val, onChange }: { label: string; val: string; onChange:
   return (
     <div>
       <div className="text-[11px] text-muted-foreground">{label}</div>
-      <Input type="number" value={val} onChange={(e) => onChange(e.target.value)} className="mt-1" />
+      <Input type="number" aria-label={label} value={val} onChange={(e) => onChange(e.target.value)} className="mt-1" />
     </div>
   )
 }

@@ -464,6 +464,7 @@ export default function Workout() {
                         unit="kg"
                         step={weightIncrement}
                         value={set.weight}
+                        ariaLabel={`第${si + 1}组重量`}
                         onChange={(v) => updateSet(activeIdx, si, { weight: v })}
                       />
                       <SetInput
@@ -471,6 +472,7 @@ export default function Workout() {
                         unit="次"
                         step={1}
                         value={set.reps}
+                        ariaLabel={`第${si + 1}组次数`}
                         onChange={(v) => updateSet(activeIdx, si, { reps: v })}
                       />
                       <SetInput
@@ -478,9 +480,25 @@ export default function Workout() {
                         unit=""
                         step={1}
                         value={set.rir}
+                        ariaLabel={`第${si + 1}组RIR`}
                         onChange={(v) => updateSet(activeIdx, si, { rir: v })}
                       />
                     </div>
+                    {si === 0 && rec.sets.length > 1 && (
+                      <div className="mt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full gap-1 text-[12px]"
+                          onClick={() => applyToRest(si)}
+                        >
+                          <ListEnd className="size-3.5" /> 应用到全部剩余组
+                        </Button>
+                        <p className="mt-1 text-[11px] text-muted-foreground text-center">
+                          将第 1 组的重量 / 次数 / RIR 复制到第 2-{rec.sets.length} 组
+                        </p>
+                      </div>
+                    )}
                     {si > 0 && (
                       <div className="mt-2 flex gap-2">
                         <Button
@@ -596,12 +614,14 @@ function SetInput({
   step,
   value,
   onChange,
+  ariaLabel,
 }: {
   label: string
   unit: string
   step: number
   value: number
   onChange: (v: number) => void
+  ariaLabel?: string
 }) {
   const [text, setText] = useState<string>(`${value}`)
   const [focused, setFocused] = useState(false)
@@ -635,6 +655,8 @@ function SetInput({
           inputMode={step % 1 === 0 ? 'numeric' : 'decimal'}
           min={0}
           step={step}
+          aria-label={ariaLabel || label}
+          aria-valuetext={`${value}${unit}`}
           className="w-16 bg-transparent text-center text-xl font-semibold tabular-nums outline-none"
           value={focused ? text : fmt(value)}
           onFocus={() => {

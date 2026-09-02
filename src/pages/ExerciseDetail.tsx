@@ -28,6 +28,10 @@ export default function ExerciseDetail() {
     profile: state.profile,
   })
 
+  // 读取当前训练计划中该动作的目标（组数 + 目标次数范围），
+  // 「下次训练目标」必须来自训练计划，而不是上次实际完成组数
+  const planTarget = findPlanTarget(state, ex.id)
+
   // ---- 汇总统计（仅基于真实已完成的组） ----
   const doneHist = history
     .map((h: any) => {
@@ -101,12 +105,17 @@ export default function ExerciseDetail() {
                   next.keep ? 'border-amber-300/70' : 'border-emerald-300/70'
                 }`}
               >
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  AI · 下次训练目标
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  <span>本地规则 · 下次训练目标</span>
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                    DEMO · 未接入云端 LLM
+                  </span>
                 </div>
                 <div className="mt-2 flex items-baseline gap-2">
                   <span className="text-3xl font-semibold tracking-tight">{next.weight}</span>
-                  <span className="text-sm text-muted-foreground">kg × {next.reps} 次</span>
+                  <span className="text-sm text-muted-foreground">
+                    kg × {planTarget ? planTarget.targetReps : next.reps} 次
+                  </span>
                   <span
                     className={`ml-auto rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
                       next.keep ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
@@ -116,7 +125,7 @@ export default function ExerciseDetail() {
                   </span>
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">
-                  {next.sets} 组 · RIR {next.rir}
+                  {planTarget ? planTarget.sets : next.sets} 组 · RIR {next.rir}
                 </div>
                 <div className="mt-3 rounded-lg bg-muted/60 p-3 text-[13px] leading-relaxed text-foreground/90">
                   {next.note}
@@ -249,4 +258,21 @@ function parseRepUpper(repRange: string): number | undefined {
   const nums = (repRange.match(/\d+/g) || []).map(Number)
   if (nums.length === 0) return undefined
   return Math.max(...nums)
+}
+
+// 从当前训练计划中查找某动作的计划目标（组数 + 目标次数范围）。
+// 「下次训练目标」应读取训练计划，而不是上次实际完成组数。
+function findPlanTarget(
+  state: any,
+  exerciseId: string,
+): { sets: number; targetReps: string } | null {
+  if (!state.trainingPlan) return null
+  for (const day of state.trainingPlan.days) {
+    for (const pe of day.exercises || []) {
+      if (pe.exerciseId === exerciseId) {
+        return { sets: pe.sets, targetReps: pe.targetReps }
+      }
+    }
+  }
+  return null
 }

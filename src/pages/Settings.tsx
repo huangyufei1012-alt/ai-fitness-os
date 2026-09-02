@@ -197,13 +197,13 @@ export default function Settings() {
               />
             </Field>
             <Field label="年龄">
-              <Input type="number" value={draft.age} onChange={(e) => set({ age: Number(e.target.value) })} />
+              <Input type="number" aria-label="年龄" value={draft.age} onChange={(e) => set({ age: Number(e.target.value) })} />
             </Field>
             <Field label="身高 (cm)">
-              <Input type="number" value={draft.heightCm} onChange={(e) => set({ heightCm: Number(e.target.value) })} />
+              <Input type="number" aria-label="身高 cm" value={draft.heightCm} onChange={(e) => set({ heightCm: Number(e.target.value) })} />
             </Field>
             <Field label="当前体重 (kg)" hint="会影响营养目标">
-              <Input type="number" value={draft.weightKg} onChange={(e) => set({ weightKg: Number(e.target.value) })} />
+              <Input type="number" aria-label="当前体重 kg" value={draft.weightKg} onChange={(e) => set({ weightKg: Number(e.target.value) })} />
             </Field>
             <Field label="训练经验">
               <select
@@ -252,6 +252,7 @@ export default function Settings() {
             <Field label="目标体重 (kg)">
               <Input
                 type="number"
+                aria-label="目标体重 kg"
                 value={draft.targetWeightKg ?? ''}
                 onChange={(e) => set({ targetWeightKg: e.target.value === '' ? undefined : Number(e.target.value) })}
               />

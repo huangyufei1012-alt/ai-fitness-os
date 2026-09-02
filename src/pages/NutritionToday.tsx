@@ -45,10 +45,13 @@ export default function NutritionToday() {
         </div>
       )}
 
-      {/* AI 晚餐/剩余建议 */}
+      {/* 晚餐/剩余建议（本地规则，非云端 LLM） */}
       <div className="mt-6 rounded-2xl border bg-card p-6">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground mb-2">
-          AI 教练 · 营养
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <span>营养建议 · 本地规则</span>
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+            DEMO · 未接入云端 LLM
+          </span>
         </div>
         {generateTodayCoachAdvice(state).filter((a) => a.includes('蛋白') || a.includes('脂肪') || a.includes('kcal')).slice(0, 1).map((a, i) => (
           <p key={i} className="text-[14px] leading-relaxed text-foreground/90">{a}</p>

@@ -3,6 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
 import { setState, todayISO } from '../lib/store'
 import { generateTrainingPlan, recalculateNutrition } from '../lib/data-plans'
 import { muscleCn, equipCn } from '../lib/utils'
@@ -35,6 +43,7 @@ const SESSION_MINUTES = [45, 60, 75, 90]
 export default function Onboarding() {
   const nav = useNavigate()
   const [step, setStep] = useState(0)
+  const [conflictOpen, setConflictOpen] = useState(false)
   const [form, setForm] = useState({
     name: '运动员',
     sex: 'male' as 'male' | 'female',
@@ -52,6 +61,25 @@ export default function Onboarding() {
     focus: [] as string[],
   })
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }))
+
+  // 目标冲突检测：增肌但目标体重低于当前体重 / 减脂但目标体重高于当前体重
+  const conflictMessage = (): string | null => {
+    const tw = form.targetWeightKg === '' ? null : Number(form.targetWeightKg)
+    if (tw == null) return null
+    if (form.goal === 'bulk' && tw < form.weightKg)
+      return `你的目标是增肌，但目标体重 ${tw}kg 低于当前体重 ${form.weightKg}kg。请确认目标方向是否正确。`
+    if (form.goal === 'cut' && tw > form.weightKg)
+      return `你的目标是减脂，但目标体重 ${tw}kg 高于当前体重 ${form.weightKg}kg。请确认目标方向是否正确。`
+    return null
+  }
+
+  const handleFinishClick = () => {
+    if (conflictMessage()) {
+      setConflictOpen(true)
+    } else {
+      finish()
+    }
+  }
 
   const finish = () => {
     const profile = {
@@ -136,6 +164,7 @@ export default function Onboarding() {
                   <Input
                     type="number"
                     value={form.targetWeightKg}
+                    aria-label="目标体重 kg"
                     onChange={(e) => set({ targetWeightKg: e.target.value === '' ? '' : Number(e.target.value) })}
                     className="mt-1.5"
                     placeholder="如 70"
@@ -315,13 +344,36 @@ export default function Onboarding() {
                 <Button variant="outline" onClick={() => setStep(1)}>
                   上一步
                 </Button>
-                <Button className="flex-1" size="lg" onClick={finish}>
+                <Button className="flex-1" size="lg" onClick={handleFinishClick}>
                   生成我的计划
                 </Button>
               </div>
             </div>
           )}
         </div>
+
+        {/* 目标冲突非阻塞确认（增肌-低目标体重 / 减脂-高目标体重） */}
+        <Dialog open={conflictOpen} onOpenChange={(o) => !o && setConflictOpen(false)}>
+          <DialogContent showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle className="text-base">请确认目标方向</DialogTitle>
+              <DialogDescription className="leading-relaxed">{conflictMessage()}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-4 gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setConflictOpen(false)
+                  setStep(0)
+                }}
+              >
+                返回修改
+              </Button>
+              <Button onClick={finish}>确认并继续</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <p className="text-center text-xs text-muted-foreground mt-4">
           所有数据仅保存在你的本机浏览器中，不会上传到任何服务器。
         </p>
@@ -348,6 +400,7 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
       <Input
         type="number"
         value={value}
+        aria-label={label}
         onChange={(e) => onChange(Number(e.target.value))}
         className="mt-1.5"
       />

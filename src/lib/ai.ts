@@ -99,15 +99,27 @@ export function generateTodayCoachAdvice(state: AppState): string[] {
       const extra = state.workoutHistory
         .filter((w) => w.date === todayISO())
         .sort((a, b) => b.durationMin! - a.durationMin!)[0]
-      if (extra && extra.exerciseRecords.some((r) => r.sets.some((s) => s.done))) {
+      if (extra) {
         const vol = sessionVolume(extra)
         const doneSets = extra.exerciseRecords.reduce(
           (a, r) => a + r.sets.filter((s) => s.done).length,
           0,
         )
-        advice.push(
-          `今天你已额外完成一次「${extra.planName}」训练（${doneSets} 组 · 容量 ${Math.round(vol)}kg）。既然已训练，今日以充分补水、清淡高蛋白饮食为主，让肌肉有足够时间恢复。`,
+        const plannedSets = extra.exerciseRecords.reduce(
+          (a, r) => a + (r.targetSets ?? r.sets.length),
+          0,
         )
+        const isPartial = extra.status === 'partial' || doneSets < plannedSets
+        if (doneSets > 0) {
+          // 已额外完成训练：完整 / 提前结束 区分口径
+          advice.push(
+            isPartial
+              ? `今天你在休息日额外进行了一次「${extra.planName}」训练但提前结束（完成 ${doneSets}/${plannedSets} 组 · 容量 ${Math.round(vol)}kg）。未完成的组不计入训练量，建议下次优先补齐目标组。`
+              : `今天你已在休息日额外完成一次「${extra.planName}」完整训练（${doneSets} 组 · 容量 ${Math.round(vol)}kg）。既然已训练，今日以充分补水、清淡高蛋白饮食为主，让肌肉有足够时间恢复。`,
+          )
+        } else {
+          advice.push(`今天是休息日。「主动恢复」：散步 20-30 分钟或轻度拉伸，有助于睡眠与恢复。`)
+        }
       } else {
         advice.push(`今天是休息日。「主动恢复」：散步 20-30 分钟或轻度拉伸，有助于睡眠与恢复。`)
       }
@@ -457,8 +469,8 @@ export function suggestNextTarget(
   if (done.length < plannedSets) {
     return {
       weight: roundToIncrement(topW, inc),
-      reps: `${topReps} 次`,
-      sets: done.length,
+      reps: String(topReps),
+      sets: plannedSets,
       rir: '1-2',
       note: `上次训练只完成 ${done.length}/${plannedSets} 组，先保持当前重量，优先完成全部目标组`,
       keep: true,
@@ -469,8 +481,8 @@ export function suggestNextTarget(
   if (topW <= 0) {
     return {
       weight: 0,
-      reps: `${topReps + 2} 次`,
-      sets: done.length,
+      reps: String(topReps + 2),
+      sets: plannedSets,
       rir: '1-2',
       note: '这是自重/轻重量动作，建议下一步在目标次数内稳定并逐步增加次数或减小组间休息',
       keep: true,
@@ -482,8 +494,8 @@ export function suggestNextTarget(
   if (upper && done.some((s) => s.reps < upper)) {
     return {
       weight: roundToIncrement(topW, inc),
-      reps: `${topReps} 次`,
-      sets: done.length,
+      reps: String(topReps),
+      sets: plannedSets,
       rir: '1-2',
       note: `仍有组未达目标次数（${upper} 次），先稳定次数再考虑加重`,
       keep: true,
@@ -494,8 +506,8 @@ export function suggestNextTarget(
   if (done.some((s) => (s.rir ?? 2) > 2)) {
     return {
       weight: roundToIncrement(topW, inc),
-      reps: `${topReps} 次`,
-      sets: done.length,
+      reps: String(topReps),
+      sets: plannedSets,
       rir: '1-2',
       note: '仍有组 RIR 较高、未逼近力竭，先提升训练强度再考虑加重',
       keep: true,
@@ -507,8 +519,8 @@ export function suggestNextTarget(
   if (doneHist.length < 2) {
     return {
       weight: roundToIncrement(topW, inc),
-      reps: `${topReps} 次`,
-      sets: done.length,
+      reps: String(topReps),
+      sets: plannedSets,
       rir: '1-2',
       note: '训练数据仍不足（需至少 2 次完整记录），继续保持当前重量，优先完成全部目标组',
       keep: true,
@@ -524,7 +536,7 @@ export function suggestNextTarget(
   return {
     weight: newW,
     reps: `${Math.max(5, topReps - 1)}-${topReps}`,
-    sets: done.length,
+    sets: plannedSets,
     rir: '1-2',
     note: `基于最近训练表现，建议加重到 ${newW}kg（器械最小增量 ${inc}kg）`,
     keep: false,

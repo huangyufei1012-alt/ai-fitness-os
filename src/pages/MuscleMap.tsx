@@ -51,9 +51,10 @@ export default function MuscleMap() {
                     }`}
                   >
                     <span>{muscleCn(m)}</span>
-                    {st && st.weeklySets > 0 ? (
+                    {st && st.weeklyWeightedSets > 0 ? (
                       <span className={`text-[10px] ${sel === m ? 'text-background/70' : 'text-muted-foreground'}`}>
-                        {st.weeklySets} 组/7天
+                        {fmtWeighted(st.weeklyWeightedSets)} 有效组/7天
+                        {st.weeklySets !== st.weeklyWeightedSets && `（参与${st.weeklySets}组）`}
                       </span>
                     ) : null}
                   </button>
@@ -193,6 +194,11 @@ function MiniStat({ label, value, hint, good }: { label: string; value: string; 
       {hint && <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>}
     </div>
   )
+}
+
+function fmtWeighted(v: number): string {
+  const r = Math.round(v * 10) / 10
+  return r % 1 === 0 ? String(r) : String(r)
 }
 
 function VolumeStat({ label, value, hint }: { label: string; value: number; hint: string }) {

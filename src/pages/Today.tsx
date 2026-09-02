@@ -3,7 +3,7 @@ import { Play, ChevronRight, CheckCircle2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { useAppState, todayISO } from '../lib/store'
 import { getTodayPlan } from '../lib/data-plans'
-import { nutritionTotals, generateTodayCoachAdvice, sessionVolume } from '../lib/ai'
+import { nutritionTotals, generateTodayCoachAdvice, sessionVolume, generateWorkoutSummary } from '../lib/ai'
 import { fmtVol } from '../components/WorkoutSummaryView'
 import { Eyebrow, Stat, MacroBar, SectionLabel } from '../components/ui-kit'
 import { fmtFullDate, muscleCn } from '../lib/utils'
@@ -30,6 +30,10 @@ export default function Today() {
     (a, w) => a + w.exerciseRecords.reduce((x, r) => x + r.sets.filter((s) => s.done).length, 0),
     0,
   )
+  // 取最近一次额外训练会话，用于区分「完成 / 提前结束」与完成度
+  const extraLatest = [...extraToday].sort((a, b) => (a.date < b.date ? 1 : 0))[0]
+  const extraSum = extraLatest ? generateWorkoutSummary(extraLatest) : null
+  const extraStatus = extraLatest?.status === 'completed' ? 'completed' : 'partial'
   const extraDuration = extraToday.reduce((a, w) => a + (w.durationMin ?? 0), 0)
   const extraMuscles = Array.from(
     new Set(
@@ -86,7 +90,9 @@ export default function Today() {
                 {todayPlan ? todayPlan.label : '—'}
               </div>
               <h2 className="mt-1.5 text-2xl font-semibold tracking-tight">
-                今日原计划：休息{extraToday.length > 0 && ' · 已额外完成训练'}
+                今日原计划：休息
+                {extraToday.length > 0 &&
+                  (extraStatus === 'completed' ? ' · 已额外完成训练' : ' · 已额外训练 · 提前结束')}
               </h2>
               {extraToday.length > 0 ? (
                 <>
@@ -97,9 +103,16 @@ export default function Today() {
                       </span>
                     ))}
                   </div>
-                  <div className="mt-5 grid grid-cols-3 gap-3 text-center">
-                    <Stat label="完成动作" value={extraActs} />
-                    <Stat label="完成组数" value={extraSets} />
+                  <div className="mt-5 grid grid-cols-4 gap-3 text-center">
+                    <Stat
+                      label="完成动作"
+                      value={extraSum ? `${extraSum.completedExercises}/${extraSum.plannedExercises}` : extraActs}
+                    />
+                    <Stat
+                      label="完成组数"
+                      value={extraSum ? `${extraSum.totalSets}/${extraSum.totalPlannedSets}` : extraSets}
+                    />
+                    <Stat label="完成率" value={extraSum ? `${extraSum.completion}%` : '—'} />
                     <Stat label="训练容量" value={fmtVol(extraVol)} unit="kg" />
                   </div>
                   <p className="mt-3 text-[12px] text-muted-foreground">
@@ -126,7 +139,12 @@ export default function Today() {
 
           {/* AI Coach Today */}
           <div className="mt-6">
-            <SectionLabel>今日 AI 教练</SectionLabel>
+            <div className="flex items-center gap-2">
+              <SectionLabel className="mb-0">今日教练建议</SectionLabel>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                本地规则 / DEMO · 未接入云端 LLM
+              </span>
+            </div>
             <div className="rounded-2xl border bg-card p-6">
               {advice.length ? (
                 <ul className="space-y-3">

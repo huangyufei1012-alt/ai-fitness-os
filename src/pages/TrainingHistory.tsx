@@ -72,11 +72,23 @@ function HistoryCard({ w }: { w: WorkoutSession }) {
           {fmtDate(w.date)} · {doneActs}/{w.exerciseRecords.length} 个动作 · {s.totalSets}/{s.totalPlannedSets} 组 · 容量 {s.volText}kg · {w.durationMin ?? '—'} min
         </div>
         <div className="mt-1 flex flex-wrap gap-1.5">
-          {sessionMuscleTags(w).slice(0, 4).map((m) => (
-            <span key={m} className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-              {m}
-            </span>
-          ))}
+          {(() => {
+            const { primary, secondary } = sessionMuscleGroups(w)
+            return (
+              <>
+                {primary.slice(0, 4).map((m) => (
+                  <span key={`p-${m}`} className="rounded-full bg-foreground/10 px-2 py-0.5 text-[11px] font-medium text-foreground">
+                    {m}
+                  </span>
+                ))}
+                {secondary.slice(0, 4).map((m) => (
+                  <span key={`s-${m}`} className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                    {m}
+                  </span>
+                ))}
+              </>
+            )
+          })()}
         </div>
       </div>
       <ChevronRight className="size-5 text-muted-foreground group-hover:translate-x-0.5 transition-transform shrink-0" />
@@ -84,15 +96,25 @@ function HistoryCard({ w }: { w: WorkoutSession }) {
   )
 }
 
-function sessionMuscleTags(w: WorkoutSession): string[] {
-  const set = new Set<string>()
+// 区分「主要肌群」与「辅助肌群」：主动作的 primaryMuscle 与所有动作的 secondaryMuscles
+function sessionMuscleGroups(w: WorkoutSession): { primary: string[]; secondary: string[] } {
+  const primary = new Set<string>()
+  const secondary = new Set<string>()
   for (const r of w.exerciseRecords) {
     if (!r.sets.some((x) => x.done)) continue
     const ex = getExercise(r.exerciseId)
     if (!ex) continue
-    set.add(ex.primaryMuscle)
+    primary.add(ex.primaryMuscle)
+    ex.secondaryMuscles.forEach((m) => secondary.add(m))
   }
-  return Array.from(set).map(muscleCn)
+  // 一个肌群若同时作为主动作与辅助肌群出现，归入「主要肌群」
+  ;[...secondary].forEach((m) => {
+    if (primary.has(m)) secondary.delete(m)
+  })
+  return {
+    primary: Array.from(primary).map(muscleCn),
+    secondary: Array.from(secondary).map(muscleCn),
+  }
 }
 
 // 训练历史详情：复用统一的 Workout Summary 视图
