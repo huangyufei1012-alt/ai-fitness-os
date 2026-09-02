@@ -185,6 +185,15 @@ export interface WorkoutExerciseRecord {
   restSec?: number // 组间休息秒数（该动作计划设定）
 }
 
+// Workout 完整生命周期四状态（对应规范第二条）：
+//   - in_progress : 正在训练，由顶层的 activeWorkout 表示（刷新/离开后可恢复）
+//   - completed   : 完整完成全部计划 → 保存为 workoutHistory 记录（status='completed'）
+//   - partial     : 提前结束但保留 → 保存为 workoutHistory 记录（status='partial'）
+//   - discarded   : 放弃本次训练 → 清除 activeWorkout 且不落库（不持久化）
+// 因此在 workoutHistory 中持久化记录的 status 只有 completed / partial 两种；
+// in_progress 与 discarded 属于生命周期状态，分别对应 activeWorkout 的有无。
+export type WorkoutStatus = 'in_progress' | 'completed' | 'partial' | 'discarded'
+
 export interface WorkoutSession {
   id: string
   date: string
@@ -194,7 +203,8 @@ export interface WorkoutSession {
   exerciseRecords: WorkoutExerciseRecord[]
   durationMin: number | null
   summaryGenerated: boolean
-  status?: 'completed' | 'partial' // 完整训练 / 提前结束
+  // 已保存记录的状态：完整训练 / 提前结束（in_progress/discarded 见 WorkoutStatus 注释）
+  status?: 'completed' | 'partial'
   notes?: string
   prs: string[]
 }
