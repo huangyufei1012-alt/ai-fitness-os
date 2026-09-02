@@ -5,9 +5,10 @@ import type {
   UserProfile,
   WorkoutSession,
 } from '../types'
-import { EXERCISES, getExercise } from './exercises'
+import { EXERCISES, getExercise, roundToIncrement, getWeightIncrement } from './exercises'
 import { todayISO } from './store'
 import { muscleCn, equipCn } from './utils'
+import { computeMuscleVolume } from './MuscleVolumeService'
 
 // ============================================================
 // AI 服务抽象层
@@ -94,7 +95,22 @@ export function generateTodayCoachAdvice(state: AppState): string[] {
         advice.push(`今天练${todays.focus}，${todays.exercises.length}个动作，预计${todays.estimatedMin}分钟。`)
       }
     } else if (plan.days[todayIdx]?.active === false) {
-      advice.push(`今天是休息日。「主动恢复」：散步 20-30 分钟或轻度拉伸，有助于睡眠与恢复。`)
+      // 今天虽是原定的休息日，但用户可能额外完成了训练
+      const extra = state.workoutHistory
+        .filter((w) => w.date === todayISO())
+        .sort((a, b) => b.durationMin! - a.durationMin!)[0]
+      if (extra && extra.exerciseRecords.some((r) => r.sets.some((s) => s.done))) {
+        const vol = sessionVolume(extra)
+        const doneSets = extra.exerciseRecords.reduce(
+          (a, r) => a + r.sets.filter((s) => s.done).length,
+          0,
+        )
+        advice.push(
+          `今天你已额外完成一次「${extra.planName}」训练（${doneSets} 组 · 容量 ${Math.round(vol)}kg）。既然已训练，今日以充分补水、清淡高蛋白饮食为主，让肌肉有足够时间恢复。`,
+        )
+      } else {
+        advice.push(`今天是休息日。「主动恢复」：散步 20-30 分钟或轻度拉伸，有助于睡眠与恢复。`)
+      }
     }
   }
 
@@ -329,17 +345,51 @@ export function sessionVolume(w: WorkoutSession): number {
 }
 
 export function generateWorkoutSummary(w: WorkoutSession) {
-  const totalSets = w.exerciseRecords.reduce((a, r) => a + r.sets.filter((s) => s.done).length, 0)
+  const plannedExercises = w.exerciseRecords.length // 计划动作数
+  const completedExercises = w.exerciseRecords.filter((r) =>
+    r.sets.some((s) => s.done),
+  ).length // 实际完成动作数
+  const totalPlannedSets = w.exerciseRecords.reduce(
+    (a, r) => a + (r.targetSets ?? r.sets.length),
+    0,
+  ) // 计划组数
+  const totalSets = w.exerciseRecords.reduce(
+    (a, r) => a + r.sets.filter((s) => s.done).length,
+    0,
+  ) // 实际完成组数
   const volume = sessionVolume(w)
   const muscles = new Set<string>()
   w.exerciseRecords.forEach((r) => {
     const ex = getExercise(r.exerciseId)
     if (ex) {
-      muscles.add(ex.primaryMuscle)
-      ex.secondaryMuscles.forEach((m) => muscles.add(m))
+      const done = r.sets.some((s) => s.done)
+      if (done) {
+        muscles.add(ex.primaryMuscle)
+        ex.secondaryMuscles.forEach((m) => muscles.add(m))
+      }
     }
   })
-  return { duration: w.durationMin, totalSets, volume, muscles: [...muscles] }
+  const completion = totalPlannedSets
+    ? Math.round((totalSets / totalPlannedSets) * 100)
+    : 0
+  const status: 'completed' | 'partial' | 'pending' =
+    w.status === 'partial' ||
+    (completedExercises > 0 && totalSets < totalPlannedSets)
+      ? 'partial'
+      : totalSets > 0
+        ? 'completed'
+        : 'pending'
+  return {
+    duration: w.durationMin,
+    plannedExercises,
+    completedExercises,
+    totalPlannedSets,
+    totalSets,
+    volume,
+    muscles: [...muscles],
+    completion,
+    status,
+  }
 }
 
 // 上一次针对某训练日的完整训练记录
@@ -367,17 +417,118 @@ export function est1RM(weight: number, reps: number): number {
   return weight * (1 + reps / 30)
 }
 
-export function suggestNextTarget(history: ReturnType<typeof exerciseHistory>) {
+export interface NextTarget {
+  weight: number
+  reps: string
+  sets: number
+  rir: string
+  note: string
+  keep: boolean // true = 数据/完成度不足，保持当前重量
+}
+
+/**
+ * 下次训练建议（进阶规则）：
+ * 只有满足以下全部条件才进入「加重」判断，否则给出「保持」说明：
+ *   1) 完成该动作的全部计划组
+ *   2) 所有工作组都达到目标次数上限
+ *   3) 所有工作组 RIR 符合目标（≤2，逼近力竭）
+ *   4) 至少参考最近 2 次训练记录
+ * 加重量取整到可用器械增量（如 70kg 杠铃 → 72.5kg，绝不出现 71.8kg）。
+ */
+export function suggestNextTarget(
+  history: ReturnType<typeof exerciseHistory>,
+  opts?: { exerciseId?: string; targetRepsUpper?: number; profile?: AppState['profile'] },
+): NextTarget | null {
   if (!history.length) return null
-  const best = history.reduce((a, b) => {
-    const aRm = a.records!.sets.filter((s)=>s.done).reduce((m, s) => Math.max(m, est1RM(s.weight, s.reps)), 0)
-    const bRm = b.records!.sets.filter((s)=>s.done).reduce((m, s) => Math.max(m, est1RM(s.weight, s.reps)), 0)
-    return aRm >= bRm ? a : b
-  })
-  const topSet = best.records!.sets.filter((s) => s.done).slice(-1)[0]
-  if (!topSet) return null
-  const newW = Math.round(topSet.weight * 1.025 * 10) / 10 // 建议 +2.5%
-  return { weight: newW, reps: `${Math.max(5, topSet.reps - 1)}-${topSet.reps}`, sets: best.records!.sets.filter((s)=>s.done).length, rir: '1-2' }
+  const last = history[history.length - 1]
+  const rec = last.records
+  if (!rec) return null
+  const done = rec.sets.filter((s) => s.done)
+  if (!done.length) return null
+
+  const plannedSets = rec.targetSets || rec.sets.length
+  const topW = Math.max(...done.map((s) => s.weight))
+  const topReps = Math.max(...done.map((s) => s.reps))
+  const inc = opts?.exerciseId
+    ? getWeightIncrement(getExercise(opts.exerciseId)?.equipment || '', opts?.profile?.weightIncrements)
+    : 2.5
+
+  // 规则1：只完成部分组 → 保持，优先完成全部目标组
+  if (done.length < plannedSets) {
+    return {
+      weight: roundToIncrement(topW, inc),
+      reps: `${topReps} 次`,
+      sets: done.length,
+      rir: '1-2',
+      note: `上次训练只完成 ${done.length}/${plannedSets} 组，先保持当前重量，优先完成全部目标组`,
+      keep: true,
+    }
+  }
+
+  // 自重动作：没有可加重的杠铃/哑铃，优先提升次数
+  if (topW <= 0) {
+    return {
+      weight: 0,
+      reps: `${topReps + 2} 次`,
+      sets: done.length,
+      rir: '1-2',
+      note: '这是自重/轻重量动作，建议下一步在目标次数内稳定并逐步增加次数或减小组间休息',
+      keep: true,
+    }
+  }
+
+  // 规则2：部分组未达目标次数上限 → 保持
+  const upper = opts?.targetRepsUpper
+  if (upper && done.some((s) => s.reps < upper)) {
+    return {
+      weight: roundToIncrement(topW, inc),
+      reps: `${topReps} 次`,
+      sets: done.length,
+      rir: '1-2',
+      note: `仍有组未达目标次数（${upper} 次），先稳定次数再考虑加重`,
+      keep: true,
+    }
+  }
+
+  // 规则3：RIR 偏高（未逼近力竭）→ 保持
+  if (done.some((s) => (s.rir ?? 2) > 2)) {
+    return {
+      weight: roundToIncrement(topW, inc),
+      reps: `${topReps} 次`,
+      sets: done.length,
+      rir: '1-2',
+      note: '仍有组 RIR 较高、未逼近力竭，先提升训练强度再考虑加重',
+      keep: true,
+    }
+  }
+
+  // 规则4：数据不足（至少需 2 次训练）→ 保持
+  const doneHist = history.filter((h) => h.records && h.records.sets.some((s) => s.done))
+  if (doneHist.length < 2) {
+    return {
+      weight: roundToIncrement(topW, inc),
+      reps: `${topReps} 次`,
+      sets: done.length,
+      rir: '1-2',
+      note: '训练数据仍不足（需至少 2 次完整记录），继续保持当前重量，优先完成全部目标组',
+      keep: true,
+    }
+  }
+
+  // 规则5：达标后建议一个器械增量，取整到增量
+  const prev = doneHist[doneHist.length - 2].records!
+  const prevDone = prev.sets.filter((s) => s.done)
+  const prevMax = prevDone.length ? Math.max(...prevDone.map((s) => s.weight)) : topW
+  const base = Math.max(topW, prevMax)
+  const newW = roundToIncrement(base + inc, inc)
+  return {
+    weight: newW,
+    reps: `${Math.max(5, topReps - 1)}-${topReps}`,
+    sets: done.length,
+    rir: '1-2',
+    note: `基于最近训练表现，建议加重到 ${newW}kg（器械最小增量 ${inc}kg）`,
+    keep: false,
+  }
 }
 
 // 某动作的上一次真实表现（用于训练页"上次表现"与计划参考）
@@ -427,7 +578,10 @@ export function detectPRs(
 //    全部来自 workoutHistory，无硬编码。
 // ============================================================
 export interface MuscleStat {
-  weeklySets: number // 近7天完成的组数
+  weeklySets: number // 近7天完成的组数（直接+间接）
+  weeklyDirectSets: number // 近7天直接组（作为主动作）
+  weeklyIndirectSets: number // 近7天间接组（仅作为辅助肌群）
+  weeklyWeightedSets: number // 近7天综合训练量 = 直接 + 0.5×间接
   lastDaysAgo: number | null // 距上次训练该肌群的天数
   lastDate: string | null
   strength4w: { label: string; change: number } | null // 4周力量变化：居中最强动作
@@ -440,8 +594,11 @@ export function muscleStats(state: AppState): Record<string, MuscleStat> {
   now.setHours(0, 0, 0, 0)
   const dayMs = 86400000
 
-  // 每个肌群收集：(date, 组数done, 主动作最佳1RM)
-  const setsByMuscle: Record<string, { date: string; sets: number }[]> = {}
+  // 直接/间接/综合训练量：全部集中在 MuscleVolumeService
+  const weekly = computeMuscleVolume(state.workoutHistory, { withinDays: 7, asOf: new Date() })
+
+  // 每个肌群收集最近训练日期（用于"距上次训练天数"）
+  const lastDates: Record<string, string | null> = {}
   const rmByEx: Record<string, { date: string; rm: number }[]> = {}
 
   for (const w of state.workoutHistory) {
@@ -450,10 +607,8 @@ export function muscleStats(state: AppState): Record<string, MuscleStat> {
       if (!ex) continue
       const done = rec.sets.filter((s) => s.done)
       if (!done.length) continue
-      const muscles = new Set([ex.primaryMuscle, ...ex.secondaryMuscles])
-      for (const m of muscles) {
-        if (!setsByMuscle[m]) setsByMuscle[m] = []
-        setsByMuscle[m].push({ date: w.date, sets: done.length })
+      for (const m of new Set([ex.primaryMuscle, ...ex.secondaryMuscles])) {
+        if (!lastDates[m] || w.date > lastDates[m]!) lastDates[m] = w.date
       }
       const rm = Math.max(...done.map((s) => est1RM(s.weight, s.reps)))
       if (!rmByEx[ex.primaryMuscle]) rmByEx[ex.primaryMuscle] = []
@@ -461,21 +616,22 @@ export function muscleStats(state: AppState): Record<string, MuscleStat> {
     }
   }
 
-  const all = new Set([...Object.keys(setsByMuscle), ...Object.keys(rmByEx)])
+  const all = new Set<string>([
+    ...Object.keys(weekly),
+    ...Object.keys(lastDates),
+    ...Object.keys(rmByEx),
+  ])
   for (const m of all) {
-    const sets = setsByMuscle[m] || []
-    const recent = sets.filter((x) => {
-      const d = new Date(x.date + 'T00:00:00')
-      return now.getTime() - d.getTime() <= 7 * dayMs
-    })
-    const weeklySets = recent.reduce((a, x) => a + x.sets, 0)
+    const vol = weekly[m] || { directSets: 0, indirectSets: 0, weightedSets: 0, totalSets: 0 }
+    const weeklySets = vol.totalSets
 
     // 上次训练天数
     let lastDaysAgo: number | null = null
     let lastDate: string | null = null
-    if (sets.length) {
-      lastDate = sets.sort((a, b) => (a.date < b.date ? 1 : -1))[0].date
-      const d = new Date(lastDate + 'T00:00:00')
+    const lastD = lastDates[m]
+    if (lastD) {
+      lastDate = lastD
+      const d = new Date(lastD + 'T00:00:00')
       lastDaysAgo = Math.max(0, Math.round((now.getTime() - d.getTime()) / dayMs))
     }
 
@@ -497,12 +653,21 @@ export function muscleStats(state: AppState): Record<string, MuscleStat> {
         if (pMax > 0) {
           const change = ((rMax - pMax) / pMax) * 100
           strength4w = { label: `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`, change }
-          strengthEx = getExercise(exRms[exRms.length - 1].date && Object.keys(rmByEx).length ? findTopExercise(state, m) : '')?.nameCn || null
+          strengthEx = getExercise(findTopExercise(state, m))?.nameCn || null
         }
       }
     }
 
-    stats[m] = { weeklySets, lastDaysAgo, lastDate, strength4w, strengthEx }
+    stats[m] = {
+      weeklySets,
+      weeklyDirectSets: vol.directSets,
+      weeklyIndirectSets: vol.indirectSets,
+      weeklyWeightedSets: vol.weightedSets,
+      lastDaysAgo,
+      lastDate,
+      strength4w,
+      strengthEx,
+    }
   }
   return stats
 }

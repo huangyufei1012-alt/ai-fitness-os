@@ -20,6 +20,7 @@ export const initialAppState: AppState = {
   nutritionPlan: null,
   trainingPlan: null,
   workoutHistory: [],
+  activeWorkout: null,
   progressLog: [],
   coachThreads: [],
   memory: {

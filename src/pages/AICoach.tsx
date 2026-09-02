@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { Send, Sparkles } from 'lucide-react'
+import { Send, Sparkles, AlertTriangle } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Textarea } from '../components/ui/textarea'
 import { useAppState, setState, uid } from '../lib/store'
-import { buildAIContext, nutritionTotals } from '../lib/ai'
+import { buildAIContext, nutritionTotals, AI_MODE } from '../lib/ai'
+import { getExercise } from '../lib/exercises'
 import { PageHeader } from '../components/ui-kit'
 import { muscleCn } from '../lib/utils'
 
 // Phase 1：AI 教练使用"本地规则引擎 + 用户真实数据"回答。
 // 接入真实 LLM 时，将 getCoachReply 替换为对 cloud API 的调用，
 // 并把 buildAIContext(state) 的输出作为 system prompt。
+const CLOUD_LLM_ON = AI_MODE !== 'local-rules'
 
 export default function AICoach() {
   const state = useAppState()
@@ -63,7 +65,22 @@ export default function AICoach() {
       <PageHeader
         title="AI 教练"
         subtitle="结合你的真实历史数据回答，避免泛泛而谈"
+        right={
+          <span className={`inline-flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-full ${CLOUD_LLM_ON ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+            {CLOUD_LLM_ON ? (
+              <><Sparkles className="size-3.5" /> AI 服务已接入</>
+            ) : (
+              <><AlertTriangle className="size-3.5" /> DEMO · 本地规则引擎（未接入云端 LLM）</>
+            )}
+          </span>
+        }
       />
+
+      {!CLOUD_LLM_ON && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[12px] leading-relaxed text-amber-800">
+          当前为本地规则引擎（Local Rules）：回答基于你的真实训练、营养与身体记录，不会调用云端模型，也不会显示虚假的"AI 生成"结论。接入真实 LLM 后此状态自动切换。
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto space-y-4 pr-1">
         {messages.map((m) => (
@@ -84,6 +101,7 @@ export default function AICoach() {
 
       <div className="mt-4 border rounded-2xl bg-card p-3 flex items-end gap-2">
         <Textarea
+          aria-label="给 AI 教练的消息"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -96,7 +114,7 @@ export default function AICoach() {
           className="border-0 focus-visible:ring-0 resize-none max-h-32"
           rows={1}
         />
-        <Button size="icon" onClick={send} disabled={!input.trim() || loading}>
+        <Button size="icon" onClick={send} disabled={!input.trim() || loading} aria-label="发送消息">
           <Send className="size-4" />
         </Button>
       </div>
@@ -188,6 +206,44 @@ function getCoachReply(state: any, q: string) {
     return {
       text: `提升肩部重点：1) 侧平举每周 12-20 组，用中低重量高次数；2) 加入面拉/反向飞鸟平衡肩后束；3) 卧推/上斜时注意别让前束过度代偿。若你想未来8周重点发展肩部，我可以把训练计划中肩部动作频率从每周1次提升到2次，并告诉你哪些动作优先。`,
       cited: '基于你的重点肌群设置生成',
+    }
+  }
+
+  // 刚才训练了哪些肌群 —— 引用真实最近训练记录
+  if (/刚才|最近|刚刚.*训练|练了哪些|哪些肌群|今天练了|都练了/i.test(q)) {
+    const lastW = state.workoutHistory[state.workoutHistory.length - 1]
+    if (lastW) {
+      const muscles = new Map<string, number>()
+      lastW.exerciseRecords.forEach((r: any) => {
+        const ex = getExercise(r.exerciseId)
+        if (!ex) return
+        const done = r.sets.filter((s: any) => s.done).length
+        if (done) {
+          muscles.set(ex.primaryMuscle, (muscles.get(ex.primaryMuscle) || 0) + done)
+        }
+        ex.secondaryMuscles.forEach((m: string) => {
+          if (done) muscles.set(m, (muscles.get(m) || 0) + done)
+        })
+      })
+      const sorted = [...muscles.entries()].sort((a, b) => b[1] - a[1])
+      if (sorted.length) {
+        const muscleList = sorted
+          .slice(0, 5)
+          .map(([m, n]) => `${muscleCn(m)}（${n} 组）`)
+          .join('、')
+        const doneTotal = lastW.exerciseRecords.reduce(
+          (a: number, r: any) => a + r.sets.filter((s: any) => s.done).length,
+          0,
+        )
+        return {
+          text: `你最近一次训练是 ${lastW.date}（${lastW.planName}），共完成 ${doneTotal} 组，主要刺激到：${muscleList}。${sorted[0] ? '若这几个肌群仍有明显酸痛，建议休息 48-72 小时再安排下一次针对训练；轻微酸胀则可正常训练。' : ''}`,
+          cited: `最近训练 ${lastW.date} · ${lastW.planName} · ${doneTotal} 组`,
+        }
+      }
+    }
+    return {
+      text: '你还没有训练记录。先完成一次训练，我就能告诉你练到了哪些肌群。',
+      cited: '',
     }
   }
 

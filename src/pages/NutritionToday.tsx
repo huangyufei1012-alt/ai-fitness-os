@@ -59,12 +59,13 @@ export default function NutritionToday() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold tracking-tight">今日餐食</h2>
           <Button onClick={() => nav('/nutrition/meals')} className="gap-2">
-            <Camera className="size-4" /> 拍照记录一餐
+            <Camera className="size-4" /> 记录餐食
           </Button>
         </div>
         {meals.length === 0 ? (
           <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-            今天还没有记录餐食。拍照或手动记录，AI 会帮你估算热量。
+            今天还没有记录餐食。可以<button className="font-medium text-foreground underline underline-offset-2" onClick={() => nav('/nutrition/meals')}>手动记录</button>
+            ，或使用本地 DEMO 规则估算；照片 AI 识别尚未接入。
           </div>
         ) : (
           <div className="space-y-3">

@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { useAppState } from '../lib/store'
 import { getExercise } from '../lib/exercises'
+import { getTodayPlan } from '../lib/data-plans'
 import { PageHeader } from '../components/ui-kit'
 import { muscleCn } from '../lib/utils'
 
@@ -9,6 +10,8 @@ export default function TrainingPlan() {
   const state = useAppState()
   const nav = useNavigate()
   const plan = state.trainingPlan
+  const todayIdx = (new Date().getDay() + 6) % 7
+  const todayPlan = getTodayPlan(state)
 
   return (
     <div className="mx-auto max-w-4xl px-8 py-6">
@@ -55,8 +58,9 @@ export default function TrainingPlan() {
                           {day.exercises.length} 动作 · {day.estimatedMin}min
                         </span>
                         <button
-                          onClick={() => nav('/training/workout')}
+                          onClick={() => nav(`/training/workout?day=${day.dayIndex}`)}
                           className="text-[12px] font-medium text-foreground flex items-center gap-0.5 hover:underline"
+                          aria-label={`开始 ${day.label} · ${day.focus} 的训练`}
                         >
                           开始 <ChevronRight className="size-3.5" />
                         </button>
@@ -66,6 +70,16 @@ export default function TrainingPlan() {
                   </div>
                 </div>
                 {day.active && (
+                  <>
+                    <div className="px-5 pb-1 text-[11px] text-muted-foreground/80">
+                      {day.dayIndex === todayIdx ? (
+                        <span className="font-medium text-foreground">今天 · 按计划训练</span>
+                      ) : (
+                        <span>
+                          手动启动{day.dayIndex === todayIdx ? '' : todayPlan?.active ? `（今天原计划为${todayPlan.label} ${todayPlan.focus}）` : '（今天原计划为休息日）'}
+                        </span>
+                      )}
+                    </div>
                   <div className="border-t divide-y">
                     {day.exercises.map((pe: any, j: number) => {
                       const ex = getExercise(pe.exerciseId)
@@ -89,6 +103,7 @@ export default function TrainingPlan() {
                       )
                     })}
                   </div>
+                  </>
                 )}
               </div>
             ))}

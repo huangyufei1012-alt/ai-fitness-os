@@ -513,3 +513,44 @@ export function getExercisesByMuscle(muscle: string): Exercise[] {
       e.primaryMuscle === muscle || e.secondaryMuscles.includes(muscle),
   )
 }
+
+// ============================================================
+// 器械最小重量增量（kg）
+// 说明：所有训练建议（下次目标/录入快捷步进）都必须取整到
+// 该动作器械可实际选择的增量，避免出现 71.8kg 这类不可执行建议。
+// 默认规则：
+//   杠铃 2.5kg · 哑铃 2kg（或自定义）· 固定器械 5kg（或自定义）· 绳索自定义
+// 用户可在「设置」里通过 weightIncrements 覆盖。
+// ============================================================
+export const DEFAULT_WEIGHT_INCREMENTS: Record<string, number> = {
+  Barbell: 2.5,
+  Dumbbells: 2,
+  Machine: 5,
+  Cable: 2.5,
+}
+
+export function getWeightIncrement(
+  equipment: string,
+  overrides?: Record<string, number>,
+): number {
+  const e = equipment.toLowerCase()
+  const key = e.includes('barbell')
+    ? 'Barbell'
+    : e.includes('dumbbell')
+      ? 'Dumbbells'
+      : e.includes('machine')
+        ? 'Machine'
+        : e.includes('cable')
+          ? 'Cable'
+          : 'Bodyweight'
+  if (overrides && typeof overrides[key] === 'number' && overrides[key] > 0) {
+    return overrides[key]
+  }
+  return key === 'Bodyweight' ? 1 : (DEFAULT_WEIGHT_INCREMENTS[key] ?? 2.5)
+}
+
+/** 把数值取整到给定增量（适配器械可选的重量） */
+export function roundToIncrement(value: number, increment: number): number {
+  if (!increment || increment <= 0) return value
+  return Math.round(value / increment) * increment
+}

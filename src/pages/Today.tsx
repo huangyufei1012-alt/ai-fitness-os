@@ -1,11 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { Play, ChevronRight } from 'lucide-react'
+import { Play, ChevronRight, CheckCircle2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { useAppState, todayISO } from '../lib/store'
 import { getTodayPlan } from '../lib/data-plans'
-import { nutritionTotals, generateTodayCoachAdvice } from '../lib/ai'
+import { nutritionTotals, generateTodayCoachAdvice, sessionVolume } from '../lib/ai'
+import { fmtVol } from '../components/WorkoutSummaryView'
 import { Eyebrow, Stat, MacroBar, SectionLabel } from '../components/ui-kit'
-import { fmtFullDate } from '../lib/utils'
+import { fmtFullDate, muscleCn } from '../lib/utils'
+import { getExercise } from '../lib/exercises'
 
 export default function Today() {
   const state = useAppState()
@@ -16,6 +18,30 @@ export default function Today() {
   const advice = generateTodayCoachAdvice(state)
   const today = todayISO()
   const progress = state.progressLog.find((p) => p.date === today)
+
+  // 今天额外完成的训练（今日原计划为休息日时）
+  const extraToday = state.workoutHistory.filter((w) => w.date === today)
+  const extraVol = extraToday.reduce((a, w) => a + sessionVolume(w), 0)
+  const extraActs = extraToday.reduce(
+    (a, w) => a + w.exerciseRecords.filter((r) => r.sets.some((s) => s.done)).length,
+    0,
+  )
+  const extraSets = extraToday.reduce(
+    (a, w) => a + w.exerciseRecords.reduce((x, r) => x + r.sets.filter((s) => s.done).length, 0),
+    0,
+  )
+  const extraDuration = extraToday.reduce((a, w) => a + (w.durationMin ?? 0), 0)
+  const extraMuscles = Array.from(
+    new Set(
+      extraToday.flatMap((w) =>
+        w.exerciseRecords.flatMap((r) => {
+          const ex = getExercise(r.exerciseId)
+          if (!ex || !r.sets.some((s) => s.done)) return []
+          return [ex.primaryMuscle, ...ex.secondaryMuscles]
+        }),
+      ),
+    ),
+  ).map(muscleCn)
 
   return (
     <div className="mx-auto max-w-5xl px-8 py-6">
@@ -59,15 +85,42 @@ export default function Today() {
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 {todayPlan ? todayPlan.label : '—'}
               </div>
-              <h2 className="mt-1.5 text-2xl font-semibold tracking-tight">今天是休息日</h2>
-              <p className="mt-1.5 text-sm text-muted-foreground">
-                主动恢复：散步 20-30 分钟或轻度拉伸，有助于改善睡眠与肌肉恢复。
-              </p>
-              <div className="mt-6 flex gap-3">
-                <Button variant="outline" onClick={() => nav('/training/plan')}>
-                  查看训练计划
-                </Button>
-              </div>
+              <h2 className="mt-1.5 text-2xl font-semibold tracking-tight">
+                今日原计划：休息{extraToday.length > 0 && ' · 已额外完成训练'}
+              </h2>
+              {extraToday.length > 0 ? (
+                <>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {extraMuscles.map((m) => (
+                      <span key={m} className="rounded-full bg-emerald-100 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-5 grid grid-cols-3 gap-3 text-center">
+                    <Stat label="完成动作" value={extraActs} />
+                    <Stat label="完成组数" value={extraSets} />
+                    <Stat label="训练容量" value={fmtVol(extraVol)} unit="kg" />
+                  </div>
+                  <p className="mt-3 text-[12px] text-muted-foreground">
+                    训练时长约 {extraDuration} min · 额外完成内容已计入你的训练记录与肌群数据。
+                  </p>
+                  <Button size="lg" className="mt-4 w-full gap-2" onClick={() => nav(`/training/history/${extraToday[0].id}`)}>
+                    <CheckCircle2 className="size-4" /> 查看训练总结
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    主动恢复：散步 20-30 分钟或轻度拉伸，有助于改善睡眠与肌肉恢复。
+                  </p>
+                  <div className="mt-6 flex gap-3">
+                    <Button variant="outline" onClick={() => nav('/training/plan')}>
+                      查看训练计划
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

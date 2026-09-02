@@ -7,10 +7,12 @@ import {
   CalendarRange,
   Dumbbell,
   Library,
+  History,
   Salad,
   Utensils,
   ClipboardList,
   MessageSquareText,
+  Settings as SettingsIcon,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
@@ -32,6 +34,7 @@ const NAV = [
     items: [
       { to: '/training/plan', label: '训练计划', icon: CalendarRange },
       { to: '/training/workout', label: '今日训练', icon: Dumbbell },
+      { to: '/training/history', label: '训练历史', icon: History },
       { to: '/training/library', label: '动作库', icon: Library },
     ],
   },
@@ -97,6 +100,21 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
+
+      <div className="px-3 pb-3 space-y-0.5">
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors',
+              isActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+            )
+          }
+        >
+          <SettingsIcon className="size-4" strokeWidth={1.8} />
+          <span className="flex-1">设置</span>
+        </NavLink>
+      </div>
 
       <div className="px-5 py-4 border-t text-[11px] leading-relaxed text-muted-foreground">
         <div className="font-medium text-foreground">隐私模式</div>

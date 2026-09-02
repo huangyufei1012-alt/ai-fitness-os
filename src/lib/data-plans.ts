@@ -200,6 +200,12 @@ export function generateTrainingPlan(profile: UserProfile) {
     ]
   }
 
+  // 关键：week 数组的下标即星期（周一=0…周日=6）。
+  // 强制每个 DayPlan 的 dayIndex 与 label 与所在位置一致，
+  // 避免对象自带硬编码 label 与下标错位导致「周三重复、周四缺失」。
+  const DOW_CN = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+  week = week.map((d, i) => ({ ...d, dayIndex: i, label: DOW_CN[i] }))
+
   return {
     id: uid('plan'),
     createdAt: new Date().toISOString(),

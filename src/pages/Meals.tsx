@@ -215,16 +215,20 @@ export default function Meals() {
                       </span>
                     )}
                   </div>
-                  <button onClick={() => removeEntry(e.id)} className="text-muted-foreground">
+                  <button
+                    onClick={() => removeEntry(e.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label={`删除 ${e.name}`}
+                  >
                     <X className="size-4" />
                   </button>
                 </div>
                 <div className="mt-2 grid grid-cols-5 gap-2 text-[13px]">
-                  <EditNum label="克" value={e.grams} onChange={(v) => updateEntry(e.id, { grams: v })} />
-                  <EditNum label="kcal" value={Math.round(e.calories)} onChange={(v) => updateEntry(e.id, { calories: v })} />
-                  <EditNum label="蛋白质" value={Math.round(e.protein)} onChange={(v) => updateEntry(e.id, { protein: v })} />
-                  <EditNum label="碳水" value={Math.round(e.carbs)} onChange={(v) => updateEntry(e.id, { carbs: v })} />
-                  <EditNum label="脂肪" value={Math.round(e.fat)} onChange={(v) => updateEntry(e.id, { fat: v })} />
+                  <EditNum id={e.id} label="克" value={e.grams} onChange={(v) => updateEntry(e.id, { grams: v })} />
+                  <EditNum id={e.id} label="kcal" value={Math.round(e.calories)} onChange={(v) => updateEntry(e.id, { calories: v })} />
+                  <EditNum id={e.id} label="蛋白质" value={Math.round(e.protein)} onChange={(v) => updateEntry(e.id, { protein: v })} />
+                  <EditNum id={e.id} label="碳水" value={Math.round(e.carbs)} onChange={(v) => updateEntry(e.id, { carbs: v })} />
+                  <EditNum id={e.id} label="脂肪" value={Math.round(e.fat)} onChange={(v) => updateEntry(e.id, { fat: v })} />
                 </div>
               </div>
             ))}
@@ -238,11 +242,15 @@ export default function Meals() {
   )
 }
 
-function EditNum({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+function EditNum({ id, label, value, onChange }: { id: string; label: string; value: number; onChange: (v: number) => void }) {
+  const inputId = `edit-${id}-${label}`
   return (
     <div>
-      <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
+      <label htmlFor={inputId} className="text-[10px] uppercase text-muted-foreground">
+        {label}
+      </label>
       <Input
+        id={inputId}
         type="number"
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}

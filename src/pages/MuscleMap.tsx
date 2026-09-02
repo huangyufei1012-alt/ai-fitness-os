@@ -92,19 +92,42 @@ function MuscleDetail({ muscle, stat }: { muscle: string; stat?: any }) {
             <h2 className="mt-1 text-3xl font-semibold tracking-tight">{muscleCn(muscle)}</h2>
           </div>
           <div className="text-right">
-            <div className="text-[12px] text-muted-foreground">近 7 天训练量</div>
+            <div className="text-[12px] text-muted-foreground">近 7 天综合训练量</div>
             <div className="text-2xl font-semibold">
-              {stat?.weeklySets ? `${stat.weeklySets} 组` : '—'}
+              {stat?.weeklyWeightedSets ? `${Math.round(stat.weeklyWeightedSets * 10) / 10} 组` : '—'}
             </div>
-            {!stat?.weeklySets && (
+            {!stat?.weeklyWeightedSets && (
               <div className="text-[11px] text-muted-foreground">尚未训练</div>
             )}
           </div>
         </div>
 
+        {/* 直接组 / 间接组 / 综合训练量 */}
+        <div className="mt-5 grid grid-cols-3 gap-3">
+          <VolumeStat
+            label="直接组"
+            value={stat?.weeklyDirectSets ?? 0}
+            hint="作为该肌群主动作"
+          />
+          <VolumeStat
+            label="间接组"
+            value={stat?.weeklyIndirectSets ?? 0}
+            hint="作为辅助肌群参与"
+          />
+          <VolumeStat
+            label="综合训练量"
+            value={stat?.weeklyWeightedSets ?? 0}
+            hint="直接组 + 0.5×间接组"
+          />
+        </div>
+
         <div className="mt-5 grid grid-cols-3 gap-4">
-          <MiniStat label="上次训练" value={lastFmt(stat?.lastDaysAgo)} hint={stat?.lastDate ? fmtDate(stat.lastDate) : '暂无记录'} />
-          <MiniStat label="恢复状态" value={recoverFmt(stat?.lastDaysAgo)} hint="按上次训练时间定性推断" />
+          <MiniStat label="上次训练" value={lastFmt(stat?.lastDaysAgo)} hint={stat?.lastDate ? fmtDate(stat.lastDate) : undefined} />
+          <MiniStat
+            label="恢复状态"
+            value={recoverFmt(stat?.lastDaysAgo)}
+            hint={stat?.lastDaysAgo != null ? '按上次训练时间定性推断' : '暂无训练记录，无法判断'}
+          />
           <MiniStat
             label="4 周力量"
             value={stat?.strength4w ? stat.strength4w.label : '—'}
@@ -144,15 +167,16 @@ function MuscleDetail({ muscle, stat }: { muscle: string; stat?: any }) {
   )
 }
 
-function lastFmt(days: number | null): string {
-  if (days === null) return '尚未训练'
+function lastFmt(days: number | null | undefined): string {
+  // 无训练记录（undefined/null 一律视为无数据），禁止日期差计算
+  if (days == null) return '尚未训练'
   if (days === 0) return '今天'
   if (days === 1) return '1 天前'
   return `${days} 天前`
 }
 
-function recoverFmt(days: number | null): string {
-  if (days === null) return '—'
+function recoverFmt(days: number | null | undefined): string {
+  if (days == null) return '暂无记录'
   if (days === 0) return '今日训练'
   if (days <= 1) return '恢复中'
   if (days <= 2) return '可再训练'
@@ -167,6 +191,20 @@ function MiniStat({ label, value, hint, good }: { label: string; value: string; 
         {value}
       </div>
       {hint && <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>}
+    </div>
+  )
+}
+
+function VolumeStat({ label, value, hint }: { label: string; value: number; hint: string }) {
+  const v = Math.round(value * 10) / 10
+  const active = v > 0
+  return (
+    <div className={`rounded-xl border p-3 text-center ${active ? 'border-emerald-300/60 bg-emerald-50/50' : 'border-dashed'}`}>
+      <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={`mt-1 text-xl font-semibold tabular-nums ${active ? 'text-emerald-700' : 'text-muted-foreground'}`}>
+        {v === Math.floor(v) ? v : v}<span className="text-xs ml-0.5">组</span>
+      </div>
+      <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>
     </div>
   )
 }

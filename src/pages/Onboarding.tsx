@@ -6,7 +6,7 @@ import { Label } from '../components/ui/label'
 import { setState, todayISO } from '../lib/store'
 import { generateTrainingPlan, recalculateNutrition } from '../lib/data-plans'
 import { muscleCn, equipCn } from '../lib/utils'
-import type { Goal } from '../types'
+import type { ActivityLevel, Goal } from '../types'
 
 const GOALS: { key: Goal; label: string; desc: string }[] = [
   { key: 'bulk', label: '增肌', desc: '增加肌肉量与维度' },
@@ -21,7 +21,7 @@ const EXPERIENCE: { key: string; label: string }[] = [
   { key: 'advanced', label: '高级 (3年+)' },
 ]
 
-const ACTIVITY: { key: string; label: string }[] = [
+const ACTIVITY: { key: ActivityLevel; label: string }[] = [
   { key: 'sedentary', label: '久坐少动' },
   { key: 'light', label: '轻度活动' },
   { key: 'moderate', label: '中度活动' },
@@ -42,8 +42,10 @@ export default function Onboarding() {
     age: 25,
     heightCm: 175,
     weightKg: 75,
+    targetWeightKg: '' as number | '',
+    targetDate: '' as string,
     experience: 'beginner',
-    activity: 'moderate',
+    activity: 'moderate' as ActivityLevel,
     daysPerWeek: 4,
     minutesPerSession: 60,
     equipment: ['Barbell', 'Dumbbells', 'Machine', 'Cable'],
@@ -58,7 +60,10 @@ export default function Onboarding() {
       goal: form.goal,
       age: form.age,
       heightCm: form.heightCm,
-      activityLevel: form.activity as never,
+      weightKg: form.weightKg,
+      targetWeightKg: form.targetWeightKg === '' ? undefined : Number(form.targetWeightKg),
+      targetDate: form.targetDate || undefined,
+      activityLevel: form.activity,
       daysPerWeek: form.daysPerWeek,
       minutesPerSession: form.minutesPerSession,
       equipment: form.equipment,
@@ -123,6 +128,28 @@ export default function Onboarding() {
                     <div className="text-xs text-muted-foreground mt-0.5">{g.desc}</div>
                   </button>
                 ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>目标体重 kg（可选）</Label>
+                  <Input
+                    type="number"
+                    value={form.targetWeightKg}
+                    onChange={(e) => set({ targetWeightKg: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="mt-1.5"
+                    placeholder="如 70"
+                  />
+                </div>
+                <div>
+                  <Label>目标日期（可选）</Label>
+                  <Input
+                    type="date"
+                    value={form.targetDate}
+                    onChange={(e) => set({ targetDate: e.target.value })}
+                    className="mt-1.5"
+                  />
+                </div>
               </div>
 
               <div>
