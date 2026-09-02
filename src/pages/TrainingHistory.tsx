@@ -71,21 +71,32 @@ function HistoryCard({ w }: { w: WorkoutSession }) {
         <div className="mt-0.5 text-[13px] text-muted-foreground">
           {fmtDate(w.date)} · {doneActs}/{w.exerciseRecords.length} 个动作 · {s.totalSets}/{s.totalPlannedSets} 组 · 容量 {s.volText}kg · {w.durationMin ?? '—'} min
         </div>
-        <div className="mt-1 flex flex-wrap gap-1.5">
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
           {(() => {
             const { primary, secondary } = sessionMuscleGroups(w)
+            if (!primary.length && !secondary.length) return null
             return (
               <>
-                {primary.slice(0, 4).map((m) => (
-                  <span key={`p-${m}`} className="rounded-full bg-foreground/10 px-2 py-0.5 text-[11px] font-medium text-foreground">
-                    {m}
-                  </span>
-                ))}
-                {secondary.slice(0, 4).map((m) => (
-                  <span key={`s-${m}`} className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                    {m}
-                  </span>
-                ))}
+                {primary.length > 0 && (
+                  <>
+                    <span className="text-[11px] text-muted-foreground">主要肌群：</span>
+                    {primary.slice(0, 4).map((m) => (
+                      <span key={`p-${m}`} className="rounded-full bg-foreground/10 px-2 py-0.5 text-[11px] font-medium text-foreground">
+                        {m}
+                      </span>
+                    ))}
+                  </>
+                )}
+                {secondary.length > 0 && (
+                  <>
+                    <span className="text-[11px] text-muted-foreground ml-1">辅助肌群：</span>
+                    {secondary.slice(0, 4).map((m) => (
+                      <span key={`s-${m}`} className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                        {m}
+                      </span>
+                    ))}
+                  </>
+                )}
               </>
             )
           })()}

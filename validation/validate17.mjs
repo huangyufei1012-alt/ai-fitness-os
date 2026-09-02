@@ -317,6 +317,8 @@ const muscleBadges = await page.evaluate(() => {
 results['16 显示主要肌群-胸'] = muscleBadges.includes('胸')
 results['16 显示辅助肌群-前束'] = muscleBadges.includes('前束')
 results['16 显示辅助肌群-肱三头肌'] = muscleBadges.includes('肱三头肌')
+results['16 有可见标签-主要肌群'] = histText.includes('主要肌群')
+results['16 有可见标签-辅助肌群'] = histText.includes('辅助肌群')
 await shot('p17_16_history_primary_secondary.png')
 console.log('  肌群徽标 =', JSON.stringify(muscleBadges))
 
