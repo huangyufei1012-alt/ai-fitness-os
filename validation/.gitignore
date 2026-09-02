@@ -1,6 +1,8 @@
 # 浏览器配置目录（Puppeteer/Edge 自动生成，勿入库）
 edge-profile/
 edge-profile*/
+probe-profile/
+probe-profile*/
 
 # 服务器日志
 *.log

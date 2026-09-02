@@ -23,9 +23,17 @@ const puppeteer = require('puppeteer-core')
 import fs from 'node:fs'
 
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
-const BASE = 'http://localhost:4173'
-const SHOTS = 'C:/Users/h/RunMateAI beta/HARNESS/fitness-os/validation/shots/'
-const USER_DIR = 'C:/Users/h/RunMateAI beta/HARNESS/fitness-os/validation/edge-profile17'
+// 可通过环境变量 BASE_URL 覆盖（如公网 https://huangyufei1012-alt.github.io/ai-fitness-os）
+const BASE = process.env.BASE_URL || 'http://localhost:4173'
+const SHOTS =
+  process.env.SHOTS_DIR ||
+  'C:/Users/h/RunMateAI beta/HARNESS/fitness-os/validation/shots/'
+// 公网运行时使用独立 profile，模拟「全新无痕 + 清网站数据」的干净环境
+const USER_DIR =
+  process.env.PROFILE_DIR ||
+  (process.env.BASE_URL
+    ? 'C:/Users/h/RunMateAI beta/HARNESS/fitness-os/validation/edge-profile-live'
+    : 'C:/Users/h/RunMateAI beta/HARNESS/fitness-os/validation/edge-profile17')
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 fs.mkdirSync(SHOTS, { recursive: true })
@@ -34,18 +42,35 @@ let browser, page
 const results = {}
 
 async function launch() {
+  const args = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-blink-features=AutomationControlled',
+    '--window-size=1280,1000',
+  ]
+  // Chromium 不读取 HTTP_PROXY 环境变量；若系统配置了本地代理（curl 可达但浏览器直连超时），
+  // 显式传给浏览器，否则公网验收会 net::ERR_CONNECTION_TIMED_OUT。
+  // 本机 127.0.0.1:7890 实为 SOCKS5 代理：HTTP 代理形式会被 Chromium 拒绝
+  // （ERR_NO_SUPPORTED_PROXIES），必须用 socks5:// scheme。
+  const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
+  if (proxy) {
+    // 仅保留 host:port（去掉 scheme 与尾斜杠/路径），避免 Chromium 误解析
+    const clean = (proxy.replace(/^https?:\/\//, '').replace(/\/+$/, ''))
+    const useSocks = /127\.0\.0\.1:7890/.test(clean) || /localhost:7890/.test(clean)
+    args.push('--proxy-server=' + (useSocks ? 'socks5://' : 'http://') + clean)
+  }
   browser = await puppeteer.launch({
     executablePath: EDGE,
     headless: 'new',
     userDataDir: USER_DIR,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled', '--window-size=1280,1000'],
+    args,
     defaultViewport: { width: 1280, height: 1000, deviceScaleFactor: 2 },
   })
   page = await browser.newPage()
 }
 
 async function goto(hash) {
-  await page.goto(BASE + '/' + (hash || ''), { waitUntil: 'networkidle0' })
+  await page.goto(BASE + '/' + (hash || ''), { waitUntil: 'networkidle2', timeout: 60000 })
   await sleep(450)
 }
 
@@ -120,7 +145,7 @@ await launch()
 // 不删除整个浏览器 profile（避免 bulk-delete 拦截），改为清空 localStorage 来重置建档
 await goto('')
 await page.evaluate(() => localStorage.clear())
-await page.reload({ waitUntil: 'networkidle0' })
+await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
 await sleep(700)
 // 默认 goal=bulk、当前体重 75；把目标体重填 69（低于当前 → 触发冲突）
 await typeText('input[aria-label="目标体重 kg"]', '69')
