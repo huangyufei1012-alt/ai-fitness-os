@@ -17,7 +17,13 @@ export default function Today() {
   const macros = state.nutritionPlan
   const advice = generateTodayCoachAdvice(state)
   const today = todayISO()
+  const todayIdx = (new Date().getDay() + 6) % 7
   const progress = state.progressLog.find((p) => p.date === today)
+
+  // 今天全部已保存的训练会话（含计划训练、手动额外训练、完整训练、提前结束训练），
+  // 不因 session 不属于当天原计划而隐藏。workoutHistory 按保存先后追加，
+  // 倒序即「完成时间新的在前」，满足按时间倒序展示。
+  const todaySessions = [...state.workoutHistory].filter((w) => w.date === today).reverse()
 
   // 今天额外完成的训练（今日原计划为休息日时）
   const extraToday = state.workoutHistory.filter((w) => w.date === today)
@@ -62,6 +68,7 @@ export default function Today() {
         <div className="col-span-12 lg:col-span-7">
           <SectionLabel>今日训练</SectionLabel>
           {todayPlan && todayPlan.active ? (
+            <>
             <Link
               to="/training/workout"
               className="block rounded-2xl border bg-card p-6 hover:border-foreground/40 transition-colors group"
@@ -84,6 +91,79 @@ export default function Today() {
                 </Button>
               </div>
             </Link>
+
+            {/* 今日训练记录：当天全部 session（含计划训练、手动额外训练、完整训练、提前结束训练） */}
+            {todaySessions.length > 0 && (
+              <div className="mt-5">
+                <div className="flex items-center gap-2">
+                  <SectionLabel className="mb-0">今日训练记录</SectionLabel>
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {todaySessions.length} 次
+                  </span>
+                </div>
+                <div className="mt-3 space-y-3">
+                  {todaySessions.map((s) => {
+                    const sum = generateWorkoutSummary(s)
+                    const isPlanned = s.dayIndex === todayIdx
+                    const isCompleted = s.status === 'completed'
+                    const statusText = isPlanned
+                      ? isCompleted
+                        ? '今日计划训练 · 已完成'
+                        : '今日计划训练 · 提前结束'
+                      : isCompleted
+                        ? '已额外完成'
+                        : '已额外训练 · 提前结束'
+                    const muscles = Array.from(
+                      new Set(
+                        s.exerciseRecords.flatMap((r) => {
+                          const ex = getExercise(r.exerciseId)
+                          if (!ex || !r.sets.some((st) => st.done)) return []
+                          return [ex.primaryMuscle, ...ex.secondaryMuscles]
+                        }),
+                      ),
+                    ).map(muscleCn)
+                    return (
+                      <Link
+                        key={s.id}
+                        to={`/training/history/${s.id}`}
+                        className="block rounded-2xl border bg-card p-5 hover:border-foreground/40 transition-colors group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-[13px] font-semibold">
+                            <span>{statusText}</span>
+                          </div>
+                          <ChevronRight className="size-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                        {(s.planLabel || s.planName) && (
+                          <div className="mt-0.5 text-[12px] text-muted-foreground">
+                            {s.planLabel || ''} · {s.planName}
+                          </div>
+                        )}
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          {muscles.length ? (
+                            muscles.map((m) => (
+                              <span
+                                key={m}
+                                className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[12px] font-medium text-emerald-700"
+                              >
+                                {m}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[12px] text-muted-foreground">无完成动作</span>
+                          )}
+                        </div>
+                        <div className="mt-2.5 text-[13px] text-muted-foreground">
+                          {sum.completedExercises}/{sum.plannedExercises} 个动作 · {sum.totalSets}/
+                          {sum.totalPlannedSets} 组 · 完成率 {sum.completion}% · 容量 {fmtVol(sessionVolume(s))} kg
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            </>
           ) : (
             <div className="rounded-2xl border bg-card p-6">
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
